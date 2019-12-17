@@ -1,3 +1,7 @@
+###############################################
+##### Script to Grade Exports from Canvas #####
+###############################################
+
 import argparse
 import pandas as pd
 import numpy as np
@@ -33,30 +37,45 @@ def calc_category_scores(category, n, percentage_per):
 			scores["Scaled {} {}".format(category, i)] = scaled_scores
 			scores.drop(label, axis=1, inplace=True)
 
-def calculate_total_scores(hw_drops=1):
-	def drop_and_calc_sum(row):
-		hws = row[[l for l in row.index if re.match("Scaled Homework", l)]].values
-		other_scores = row[[l for l in row.index if not re.match("Scaled Homework", l) and l != "Total"]].values
-		hws = drop_scores(hws, n=hw_drops)
-		return np.sum(np.append(hws, other_scores))
-	scores["Total"] = scores.apply(drop_and_calc_sum, axis=1)
-
+def drop_and_calc_sum(drops, row):
+	all_scores = np.array([])
+	for cat in drops:
+		assignment_scores = row[[l for l in row.index if re.match("Scaled {}".format(cat), l)]].values
+		assignment_scores = drop_scores(assignment_scores, n=drops[cat])
+		all_scores = np.append(all_scores, assignment_scores)
+	return np.sum(all_scores)
 
 def grade(path, config):
 	global scores, points_possible, assignment_labels
+
+	# load and clean scores
 	scores_raw = pd.read_csv(path)
-	scores_raw["SIS User ID"] = scores_raw["SIS User ID"].astype(str)
-	assignment_labels = [l for l in scores_raw.columns if re.match(r"(Homework\b|Project\b|OH\b)", l)]
+
+	# matching function
+	def matches_any_category(label):
+		return any([re.match("\\b{}\\b".format(cat), label) for cat in config.keys()])
+
+	# get all assignment labels and points possible
+	assignment_labels = [l for l in scores_raw.columns if matches_any_category(l)]
 	points_possible = scores_raw.loc[0,assignment_labels]
+
+	# finish cleaning scores
 	scores = scores_raw.loc[1:,][scores_raw["Student"] != "Student, Test"].fillna(0)
+	scores["SIS User ID"] = scores["SIS User ID"].astype(int).astype(str)
 	scores = scores.set_index("SIS User ID")[assignment_labels]
+
+	# get number of assignments to drop
+	drops = {cat : config[cat]["drops"] if "drops" in config[cat] else 0 for cat in config}
+
 	for cat in config:
 		try:
-			perc_per = config[cat]["percentage"] / (config[cat]["number"] - config[cat]["drops"])
+			perc_per = config[cat]["percentage"] / (config[cat]["number"] - drops[cat])
 		except ZeroDivisionError:
 			perc_per = config[cat]["percentage"]
-			calc_category_scores(cat, config[cat]["number"], perc_per)
-	calculate_total_scores(hw_drops=config["Homework"]["drops"])
+		calc_category_scores(cat, config[cat]["number"], perc_per)
+
+	scores["Total"] = scores.apply(lambda row: drop_and_calc_sum(drops, row), axis=1)
+	scores.reset_index(inplace=True)
 
 
 def main():
@@ -69,9 +88,8 @@ def main():
 	with open(params.config) as f:
 		config = json.load(f)
 
-	drops = {cat : config[cat]["drops"] if "drops" in config[cat] else 0 for cat in config}
-	print(drops)
-
 	grade(params.scores, config)
+	scores.to_csv(params.output, index=False)
 
-	scores.to_csv(params.output)
+if __name__ == "__main__":
+	main()

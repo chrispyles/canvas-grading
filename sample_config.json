@@ -6,12 +6,10 @@
     },
     "Project": {
         "number": 2,
-        "percentage": 45,
-        "drops": 0
+        "percentage": 45
     },
     "OH": {
         "number": 0,
-        "percentage": 20,
-        "drops": 0
+        "percentage": 20
     }
 }

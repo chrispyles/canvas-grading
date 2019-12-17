@@ -1,0 +1,17 @@
+{
+    "Homework": {
+        "number": 8,
+        "percentage": 35,
+        "drops": 1
+    },
+    "Project": {
+        "number": 2,
+        "percentage": 45,
+        "drops": 0
+    },
+    "OH": {
+        "number": 0,
+        "percentage": 20,
+        "drops": 0
+    }
+}

@@ -5,11 +5,13 @@
         "drops": 1
     },
     "Project": {
-        "number": 2,
+        "number": 3,
         "percentage": 45
     },
-    "OH": {
-        "number": 0,
-        "percentage": 20
+    "Attendance": {
+        "number": 13,
+        "percentage": 20,
+        "required": 10,
+        "cap": "required"
     }
 }

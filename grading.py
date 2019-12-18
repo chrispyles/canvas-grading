@@ -43,6 +43,8 @@ def drop_and_calc_sum(drops, row):
 		assignment_scores = row[[l for l in row.index if re.match("Scaled {}".format(cat), l)]].values
 		assignment_scores = drop_scores(assignment_scores, n=drops[cat])
 		all_scores = np.append(all_scores, assignment_scores)
+	if has_attendance:
+		all_scores = np.append(all_scores, row["Scaled Attendance"])
 	return np.sum(all_scores)
 
 def grade(path, config):
@@ -73,6 +75,19 @@ def grade(path, config):
 		except ZeroDivisionError:
 			perc_per = config[cat]["percentage"]
 		calc_category_scores(cat, config[cat]["number"], perc_per)
+	
+	if has_attendance:
+		scores = pd.merge(
+			scores.reset_index(), 
+			attendance, 
+			left_on = "SIS User ID", 
+			right_on = "student_id", 
+			how="outer",
+			suffixes = (False, False)	
+		)
+		scores.drop("student_id", axis=1, inplace=True)
+		scores.set_index("SIS User ID", inplace=True)
+		scores.rename({"attendance_score":"Scaled Attendance"}, axis=1, inplace=True)
 
 	scores["Total"] = scores.apply(lambda row: drop_and_calc_sum(drops, row), axis=1)
 	scores.reset_index(inplace=True)
@@ -83,13 +98,47 @@ def main():
 	parser.add_argument("-s", "--scores", default="scores.csv", help="Canvas exported scores file")
 	parser.add_argument("-c", "--config", default="grading_config.json", help="Grading config")
 	parser.add_argument("-o", "--output", default="final_scores.csv", help="Output path")
+	parser.add_argument("-a", "--attendance", default="attendance.csv", help="Attendance counts")
 	params = parser.parse_args()
 
 	with open(params.config) as f:
 		config = json.load(f)
 
+	global attendance, has_attendance
+	if "Attendance" in config:
+		has_attendance = True
+		attendance = pd.read_csv(params.attendance)
+		attendance["student_id"] = attendance["student_id"].astype(int).astype(str)
+		if "cap" in config["Attendance"] and config["Attendance"]["cap"] != "none":
+			cap = config["Attendance"][config["Attendance"]["cap"]]
+			attendance["count"] = attendance["count"].apply(lambda v: min(v, cap))
+		else:
+			cap = None
+		attendance["attendance_score"] = attendance["count"].apply(
+			lambda s: scale_to_percentage(
+				s, 
+				cap or config["Attendance"]["required"], 
+				config["Attendance"]["percentage"]
+			)
+		)
+		attendance.drop("count", axis=1, inplace=True)
+		del config["Attendance"]
+	else:
+		has_attendance = False
+
 	grade(params.scores, config)
-	scores.to_csv(params.output, index=False)
+
+	names = pd.read_csv(params.scores)[["SIS User ID", "Student"]].dropna(subset=["SIS User ID"])
+	names["SIS User ID"] = names["SIS User ID"].astype(int).astype(str)
+	merged_scores = pd.merge(
+		scores,
+		names,
+		on = "SIS User ID",
+		how="outer",
+		suffixes = (False, False)
+	)
+	merged_scores = merged_scores[[merged_scores.columns[-1]] + merged_scores.columns[:-1].tolist()]
+	merged_scores.to_csv(params.output, index=False)
 
 if __name__ == "__main__":
 	main()

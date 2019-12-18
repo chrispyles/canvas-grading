@@ -8,10 +8,10 @@ import numpy as np
 import re
 import json
 
-def drop_scores(scores, n=1):
-	if len(scores) < 8:
-		return np.append(scores, np.zeros(7-len(scores)))
-	for _ in range(n):
+def drop_scores(scores, n_possible, n_drops=1):
+	if len(scores) < n_possible:
+		return np.append(scores, np.zeros(n_possible-1-len(scores)))
+	for _ in range(n_drops):
 		key = np.argmin(scores)
 		scores = np.append(scores[:key], scores[key+1:])
 	return scores
@@ -41,7 +41,7 @@ def drop_and_calc_sum(drops, row):
 	all_scores = np.array([])
 	for cat in drops:
 		assignment_scores = row[[l for l in row.index if re.match("Scaled {}".format(cat), l)]].values
-		assignment_scores = drop_scores(assignment_scores, n=drops[cat])
+		assignment_scores = drop_scores(assignment_scores, config[cat]["number"], drops[cat])
 		all_scores = np.append(all_scores, assignment_scores)
 	if has_attendance:
 		all_scores = np.append(all_scores, row["Scaled Attendance"])
@@ -101,6 +101,7 @@ def main():
 	parser.add_argument("-a", "--attendance", default="attendance.csv", help="Attendance counts")
 	params = parser.parse_args()
 
+	global config
 	with open(params.config) as f:
 		config = json.load(f)
 
